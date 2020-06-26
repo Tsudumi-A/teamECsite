@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8" />
+<title>Réagir</title>
+</head>
+
+<body>
+
+
+<th:block th:fragment="pageHeader">
+	<script src="http://code.jquery.com/jquery-3.4.1.min.js"></script>
+	<script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+	<link rel="stylesheet"
+			href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css">
+	<script src="/js/util/stringUtil.js" th:src="@{/js/util/stringUtil.js}"></script>
+	<script src="/js/util/validator.js" th:src="@{/js/util/validator.js}"></script>
+	<script src="/js/dialogConfig.js" th:src="@{/js/dialogConfig.js}"></script>
+	<script>
+		$(() => {
+			
+			$('#loginError').dialog(dialogConfig.loginError);
+			
+			$('button#login').on('click', login);
+			
+			//	ログアウトボタンにログアウトイベントリスナを指定
+			$(document).on('click', 'button#logout' , logout);
+
+		});
+		
+		//	ログインボタン押下時の処理
+		let login = (event) => {
+			event.preventDefault();
+			let jsonString = {
+					'userName': $('input[name=userName]').val(),
+					'password': $('input[name=password]').val()
+			};
+			//	非同期通信でAuthControllerのloginメソッドへ送る
+			$.ajax({
+				type: 			'POST',
+				url: 			'/react/auth/login',
+				cache: 			false,
+				data: 			JSON.stringify(jsonString),
+				timeout: 		10000,
+				contentType: 	'application/json',
+				datatype: 		'json',
+				scriptCharset: 	'utf-8'
+			})
+			.then((result) => {	
+				/*	ajax通信成功時の処理
+				 result がuserName（ログイン成功時）:ログイン→アウトボタンの書換え、ゲスト→userName切り替え、hiddenUserName挿入DOM操作、マイページボタン挿入
+				 result がnull（ログイン失敗時）	:ログインエラーダイアログを表示	
+				 共通処理							:ログインエリア内のinputの値をクリア			*/
+				 		 
+					let userName = JSON.parse(result);
+					let loginForm = $('.loginArea').find('form');
+				 	//	ログインエリア内のinputの値をクリア
+				 	$(loginForm).find('input[type=text]').val('');
+					$(loginForm).find('input[type=password]').val('');
+				
+				 	if(userName != null) {
+				 		
+						//	ログイン→ログアウトボタン切り替えDOM操作
+				 		$('#login').remove();					 		
+						$(loginForm).append('<button id="logout" type="submit">ログアウト</button>');
+						
+						//	ゲスト→userName切り替えDOM操作
+						$('.headerTop').find('.welcomeMsg').remove();
+						$('.signup').after('<span class="welcomeMsg">ようこそ！  '+  userName  +' さん</span>');
+						
+						//	不可視の状態のuserNameを書き込むDOM操作
+						$('#hiddenUserName').attr('value', userName);
+						
+						//	マイページボタン挿入するDOM操作
+						$('.menu li').after('<li ><a href="/react/mypage/">マイページ</a></li>')
+						
+					} else {
+						$('#loginError').dialog('open');
+					}
+
+				},() => {
+				//	ajax通信失敗時の処理
+					console.error('Error: ajax connection failed in login process.');
+				}
+			);
+		};
+		
+		//	ログアウトボタン押下時の処理
+		let logout = (event) => {
+			event.preventDefault();
+			//	非同期通信でAuthControllerのloginメソッドへ送る	
+			$.ajax({
+				type:			'POST',
+				url:			'/react/auth/logout',
+				timeout: 		10000,
+				cache:			false,
+				scriptCharset:	'utf-8'
+			})
+			.then((result) => {
+				//	ログアウト成功時の処理（ログアウト→ログインのDOM操作、アラート及びトップ画面への遷移）
+				alert('ログアウトしました。');
+				location.href = '/react/';
+				}, () => {
+				//	ログアウト失敗時の処理
+					console.error('Error: ajax connection failed in logout process.');
+				}
+			);
+		};
+		
+	</script>
+	<div class="headerTop">
+		<h1 class="logo"><a href="/react/">Réagir</a></h1>
+		<span class="signup">
+			<a href="/react/user/" th:href="@{/react/user/}">
+			新規ユーザ登録はこちら
+			</a>
+		</span>
+		<span class="welcomeMsg"
+			th:text="'ようこそ！ '+ ${loginSession != null && loginSession.logined == true ? loginSession.userName : 'ゲスト'} +' さん'" > 
+		</span>
+		<div class="line"></div>
+	</div>
+	 
+	<nav>
+		<div class="loginArea">
+
+	 		<form action="#" method="POST">				
+				<input type="text" name="userName" />
+				<input type="password" name="password" />
+				<!-- logiSessionが存在しないとき（Controllerでインスタンス生成をしていないとき）にエラーが出ないように条件式第一項を定義 -->
+			 	<button id="login" th:if="${loginSession == null || loginSession.logined != true}"  type="submit">ログイン</button>
+			 	<button id="logout" th:if="${loginSession != null && loginSession.logined == true}"  type="submit">ログアウト</button>
+			 	
+<!-- 		不可視の状態のuserName 					 -->			 	
+			 	<input type="hidden" name="hiddenUserName" id="hiddenUserName"
+			 		 th:value="${loginSession != null && loginSession.logined == true ? loginSession.userName : ''}" />
+			</form>		
+																																			
+		</div>
+		<ul class="menu">
+			<li><a href="/react/cart/">カート</a></li>
+<!-- 		リンク押下時ログイン状況を確認するjQueryを実行する 	-->
+			<li th:if="${loginSession != null && loginSession.logined == true}" ><a href="/react/mypage/">マイページ</a></li>
+		</ul>
+	</nav>
+		<!-- Modal Dialog (ログインエラー) -->
+	<div th:insert="fragments/dialog_login_error::dialogLoginError"></div>
+	
+</th:block>
+
+
+
+</body>
+</html>
